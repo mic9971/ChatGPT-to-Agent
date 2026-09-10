@@ -1,6 +1,6 @@
 # Use Case Catalog
 
-Total detailed use cases: **42**.
+Total detailed use cases: **50**.
 
 | Module | Use case | Title | Priority | Phase | Status |
 |---|---|---|---:|---|---|
@@ -33,6 +33,14 @@ Total detailed use cases: **42**.
 | C2C Control Protocol | `UC-C2C-06` | Complete Task with DONE | P1 | V0.7 | DESIGN-READY / NOT-STARTED |
 | C2C Control Protocol | `UC-C2C-07` | Handle BLOCKED or ERROR | P1 | V0.7 | DESIGN-READY / NOT-STARTED |
 | C2C Control Protocol | `UC-C2C-08` | Resume or HANDOFF Task | P1 | V0.7 | DESIGN-READY / NOT-STARTED |
+| Control Plane Automation | `UC-CTRL-01` | Start Control Session | P1 | V0.8 | DESIGN-READY / NOT-STARTED |
+| Control Plane Automation | `UC-CTRL-02` | Open or Attach Planner Conversation | P1 | V0.8 | DESIGN-READY / NOT-STARTED |
+| Control Plane Automation | `UC-CTRL-03` | Send C2C Control Message | P1 | V0.8 | DESIGN-READY / NOT-STARTED |
+| Control Plane Automation | `UC-CTRL-04` | Receive and Validate Planner Response | P1 | V0.8 | DESIGN-READY / NOT-STARTED |
+| Control Plane Automation | `UC-CTRL-05` | Run C2C Iteration Control Loop | P1 | V0.8 | DESIGN-READY / NOT-STARTED |
+| Control Plane Automation | `UC-CTRL-06` | Resume Existing Conversation | P1 | V0.8 | DESIGN-READY / NOT-STARTED |
+| Control Plane Automation | `UC-CTRL-07` | Handoff to Replacement Conversation | P1 | V0.8 | DESIGN-READY / NOT-STARTED |
+| Control Plane Automation | `UC-CTRL-08` | Recover Control Driver Failure | P1 | V0.8 | DESIGN-READY / NOT-STARTED |
 | CLI & Local Lifecycle | `UC-CLI-01` | Setup CLI | P0 | V0.6 | DESIGN-READY / NOT-STARTED |
 | CLI & Local Lifecycle | `UC-CLI-02` | Start and Stop Runtime | P0 | V0.6 | DESIGN-READY / NOT-STARTED |
 | CLI & Local Lifecycle | `UC-CLI-03` | Status and Doctor | P0 | V0.6 | DESIGN-READY / NOT-STARTED |

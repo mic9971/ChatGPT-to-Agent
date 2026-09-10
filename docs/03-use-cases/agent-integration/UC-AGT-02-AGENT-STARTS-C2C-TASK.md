@@ -10,109 +10,58 @@
 | Phase | V0.8 |
 | Module | Execution Agent Integration |
 | Primary actor | Execution Agent |
-| Depends on | UC-CLI-04, UC-C2C-01 |
+| Depends on | UC-CLI-04, UC-C2C-01, UC-CTRL-01, UC-CTRL-02, UC-CTRL-03, UC-CTRL-04 |
 
 ## Goal
 
-Standardize how an execution agent ensures runtime readiness, opens task and sends INIT to planner.
+Standardize how an execution agent ensures runtime readiness, opens/attaches the task-bound planning conversation, sends INIT and accepts a validated PLAN.
 
-## Trigger
+## Main flow
 
-User asks agent to use C2C for a coding task.
-
-## Preconditions
-
-- Integration pack loaded.
-
-## Postconditions
-
-- Runtime READY/NEED_ACTION handled; valid INIT produced for planner.
-
-## Scope
-
-### In scope
-- `c2c ensure --json`
-- session create
-- INIT relay
-
-### Out of scope
-- agent bypasses pairing/security
-- pastes repo into control message
+1. Agent calls `c2c ensure --json`.
+2. If user action is required, stop and surface the exact requirement.
+3. Start/load local task session (`UC-CTRL-01`).
+4. Open/attach ChatGPT conversation (`UC-CTRL-02`).
+5. Relay validated INIT (`UC-CTRL-03`).
+6. Receive/validate PLAN (`UC-CTRL-04`).
+7. Route accepted PLAN to `UC-AGT-03` for local execution.
 
 ## Referenced business rules
 
 - `BR-COM-004`
 - `BR-C2C-001`
 - `BR-C2C-003`
+- `BR-CTRL-003`
+- `BR-CTRL-004`
+- `BR-CTRL-005`
 
-The referenced BR files under `docs/02-common/` are normative. If this use case conflicts with a BR, the BR wins unless an approved ADR explicitly changes the rule.
+## Security
 
-## Main flow
+The agent may not fabricate READY, bypass MCP pairing/auth, capture ChatGPT account credentials, or paste repository evidence into control messages.
 
-1. Agent calls ensure.
-2. If action required, stop and tell user exact requirement.
-3. Create task/session.
-4. Relay INIT exactly/bounded to ChatGPT planner via available UI/integration transport.
-5. Wait for PLAN.
+## Failure flows
 
-## Alternate / failure flows
+- NEED_PAIRING/NEED_SETUP -> user action.
+- ChatGPT login/MFA/CAPTCHA -> `CTRL_USER_AUTH_REQUIRED`.
+- Conversation unavailable -> explicit HANDOFF/recovery path, not silent replacement.
 
-- Planner unavailable -> HANDOFF/manual fallback instructions.
+## Tests
 
-## Detailed design
-
-### Application contracts
-
-- Integration instruction, not Core SDK contract in V1
-
-### Persistence
-
-Session state handled by C2C.NET.
-
-### Security
-
-Agent may not fabricate READY or bypass auth.
-
-### Concurrency / idempotency
-
-Repeated ensure/task creation follows idempotency/request key guidance.
-
-### Limits / pagination / timeouts
-
-Control message cap.
-
-### Observability
-
-Agent reports commands actually run.
-
-### Error codes
-
-- `C2C_NOT_READY`
-
-## Test design
-
-### Unit tests
-- instruction conformance review
-
-### Integration tests
-- E2E sample agent flow
-
-### Adversarial / security tests
-- ensure returns NEED_PAIRING
+- ensure READY -> INIT -> PLAN;
+- NEED_PAIRING;
+- browser auth required;
+- wrong task/iteration planner response rejected.
 
 ## Acceptance criteria
 
-- [ ] Agent stops for NEED_PAIRING instead of hacking around it.
-
-## Implementation checklist
-
-- [ ] Write Antigravity runbook
-- [ ] E2E checklist
+- [ ] Agent stops for required setup/auth actions instead of bypassing them.
+- [ ] INIT/PLAN use the control-plane driver while workspace evidence remains MCP-only.
 
 ## Architecture references
 
 - `01-architecture/10-AGENT-INTEGRATION.md`
+- `01-architecture/20-CONTROL-PLANE-AUTOMATION.md`
 
 ## Agent implementation rule
 
-Implement **only this use case and its explicit dependencies**. Read the referenced BR files first. Do not pre-build later use cases. If implementation evidence requires a design change, stop and update/approve the design before broadening scope.
+Implement only this UC and its explicit dependencies. Do not pre-build later use cases.
