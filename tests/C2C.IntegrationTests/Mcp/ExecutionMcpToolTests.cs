@@ -40,6 +40,7 @@ public sealed class ExecutionMcpToolTests : IDisposable
 
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
+            builder.UseSetting("Auth:Profile", "LocalOnly");
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IWorkspaceContext>(_context);
