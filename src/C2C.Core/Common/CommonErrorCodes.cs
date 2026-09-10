@@ -22,4 +22,9 @@ public static class CommonErrorCodes
     public const string AuthPairingExpired = "AUTH_PAIRING_EXPIRED";
     public const string AuthPairingLocked = "AUTH_PAIRING_LOCKED";
     public const string AuthPairingInvalid = "AUTH_PAIRING_INVALID";
+    public const string RuntimeStartFailed = "RUNTIME_START_FAILED";
+    public const string RuntimeStopFailed = "RUNTIME_STOP_FAILED";
+    public const string DependencyUnavailable = "DEPENDENCY_UNAVAILABLE";
+    public const string WorkspaceNotConfigured = "WORKSPACE_NOT_CONFIGURED";
+    public const string SecurityViolation = "SECURITY_VIOLATION";
 }
