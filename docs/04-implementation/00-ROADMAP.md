@@ -16,11 +16,9 @@
 7. `UC-GIT-01` Git Status
 8. `UC-GIT-02` Git Diff
 
-Current source already contains the workspace discovery/search capability; verify the baseline before changing it. The next bounded implementation slice is Git evidence.
+Detailed implementation pack: `phases/v0.2-git-evidence/00-README.md`.
 
-**Detailed implementation pack:** `docs/04-implementation/phases/v0.2-git-evidence/00-README.md`
-
-**Gate:** denied names/content never leak through list/search/Git; Git patch bodies are retrieved only for paths authorized before diff-body retrieval; workspace remains confined even when it is a subdirectory of a larger Git repository.
+**Gate:** denied names/content never leak through list/search/Git.
 
 ## Phase V0.3 — Execution evidence
 
@@ -39,6 +37,21 @@ Current source already contains the workspace discovery/search capability; verif
 
 14. `UC-AUTH-01..05`
 15. Finish protected-call path in `UC-MCP-02`
+
+Detailed implementation pack: `phases/v0.5-auth-pairing/00-README.md`.
+
+Implementation order inside the phase is deliberately gated:
+
+```text
+V0.5A auth substrate/interoperability spike
+  -> pairing
+  -> authorize + PKCE
+  -> token + protected MCP
+  -> refresh rotation
+  -> revoke/unpair capability
+```
+
+**Gate:** current MCP auth profile is evidenced, Protected Resource Metadata/discovery is accurate, PKCE/issuer/resource/workspace/client binding is enforced, all nine tools have exact scopes, refresh rotation/replay and revoke semantics are proven, and no auth secret leaks. DCR remains compatibility-only.
 
 ## Phase V0.6 — CLI
 
