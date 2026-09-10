@@ -1,14 +1,18 @@
 using System.Text.Json;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using OpenIddict.Abstractions;
 
+using C2C.Core.Authorization;
 using C2C.Core.Common;
 using C2C.Core.Execution;
 using C2C.Core.Git;
 using C2C.Core.Workspace;
+using C2C.Host.Auth;
 
 namespace C2C.Host.Mcp;
 
@@ -223,6 +227,49 @@ public static class McpServerConfigurator
         CancellationToken ct)
     {
         string toolName = request.Params.Name;
+
+        // Tool-level OAuth scope verification adhering to UC-MCP-02 and BR-SEC-007
+        string? requiredScope = McpToolScopes.GetRequiredScope(toolName);
+        if (requiredScope != null)
+        {
+            var services = request.Services;
+            var authOptions = services?.GetService<AuthorizationServerOptions>();
+
+            if (authOptions?.EnableRemoteAuthorization == true)
+            {
+                var httpContextAccessor = services?.GetService<IHttpContextAccessor>();
+                var httpContext = httpContextAccessor?.HttpContext;
+                var user = httpContext?.User;
+
+                if (user == null || user.Identity?.IsAuthenticated != true || !user.HasScope(requiredScope))
+                {
+                    if (httpContext != null)
+                    {
+                        httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        string metadataUrl = $"{authOptions.Issuer.TrimEnd('/')}/.well-known/oauth-protected-resource";
+                        httpContext.Response.Headers["WWW-Authenticate"] =
+                            $"Bearer error=\"insufficient_scope\", scope=\"{requiredScope}\", resource_metadata=\"{metadataUrl}\"";
+                    }
+
+                    return new CallToolResult
+                    {
+                        IsError = true,
+                        Content =
+                        [
+                            new TextContentBlock
+                            {
+                                Text = JsonSerializer.Serialize(new
+                                {
+                                    error = new OperationError(
+                                        "INSUFFICIENT_SCOPE",
+                                        $"The caller does not have the required scope '{requiredScope}' for tool '{toolName}'.")
+                                }, JsonOptions)
+                            }
+                        ]
+                    };
+                }
+            }
+        }
 
         switch (toolName)
         {

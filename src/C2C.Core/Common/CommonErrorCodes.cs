@@ -19,4 +19,7 @@ public static class CommonErrorCodes
     public const string ExecutionNotFound = "EXECUTION_NOT_FOUND";
     public const string ProtocolVersionUnsupported = "PROTOCOL_VERSION_UNSUPPORTED";
     public const string TunnelStartFailed = "TUNNEL_START_FAILED";
+    public const string AuthPairingExpired = "AUTH_PAIRING_EXPIRED";
+    public const string AuthPairingLocked = "AUTH_PAIRING_LOCKED";
+    public const string AuthPairingInvalid = "AUTH_PAIRING_INVALID";
 }
