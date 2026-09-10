@@ -10,6 +10,7 @@ This repository is **design-first and use-case-driven**.
 4. Read every referenced `BR-*` in `docs/02-common/`.
 5. Read the minimum architecture references listed by the UC.
 6. Inspect existing source/tests nearest the change.
+7. When creating/moving files or defining new models/interfaces/folders, read `skills/dotnet-project-conventions/SKILL.md` and only the focused references needed for placement.
 
 ## Hard constraints
 
@@ -18,6 +19,7 @@ This repository is **design-first and use-case-driven**.
 - MCP remains read-only in V1.
 - One bridge = one workspace.
 - Security ambiguity fails closed.
+- Preserve local/capability structure; do not perform unrelated folder/model cleanup while implementing a UC.
 - Do not claim build/test success without actually running commands.
 - Do not commit unless explicitly requested.
 
