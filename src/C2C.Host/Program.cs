@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using C2C.Core.Common;
 using C2C.Core.Workspace;
 using C2C.Host.Mcp;
+using C2C.Infrastructure.Execution;
 using C2C.Infrastructure.Git;
 using C2C.Infrastructure.Workspace;
 
@@ -27,6 +28,7 @@ public class Program
         // Register Core & Infrastructure services by capability (12-DI-CONVENTIONS.md)
         builder.Services.AddWorkspaceServices();
         builder.Services.AddGitServices();
+        builder.Services.AddExecutionServices();
 
         // Default workspace context if none provided (e.g. from environment or config store)
         builder.Services.AddSingleton<IWorkspaceContext>(sp =>
