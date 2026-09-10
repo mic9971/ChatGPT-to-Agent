@@ -16,7 +16,11 @@
 7. `UC-GIT-01` Git Status
 8. `UC-GIT-02` Git Diff
 
-**Gate:** denied names/content never leak through list/search/Git.
+Current source already contains the workspace discovery/search capability; verify the baseline before changing it. The next bounded implementation slice is Git evidence.
+
+**Detailed implementation pack:** `docs/04-implementation/phases/v0.2-git-evidence/00-README.md`
+
+**Gate:** denied names/content never leak through list/search/Git; Git patch bodies are retrieved only for paths authorized before diff-body retrieval; workspace remains confined even when it is a subdirectory of a larger Git repository.
 
 ## Phase V0.3 — Execution evidence
 
