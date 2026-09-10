@@ -85,26 +85,45 @@ V0.6A CLI substrate + setup + read-only diagnostics
 23. `UC-C2C-01..08`
 24. `UC-CLI-06` Manage C2C Session, only after the protocol/session contracts exist
 
+Detailed implementation pack: `phases/v0.7-c2c-protocol/00-README.md`.
+
 **Gate:** protocol/session transitions, evidence references, idempotency, executor lease and HANDOFF are deterministic without browser automation.
 
-## Phase V0.8A — Control Plane Automation Core
+## Phase V0.8A — Control Plane Coordination Substrate
 
-25. `UC-CTRL-01..04` session/conversation/send/receive
-26. `UC-CTRL-05..08` loop/resume/handoff/recovery
-27. Implement the transport abstraction only now, after V0.7 contracts are accepted.
+25. `UC-CTRL-01..02` start control session + task-bound conversation binding
+26. `UC-CTRL-03..04` bounded send + receive/validate
+27. `UC-CTRL-05..08` iteration loop + resume + HANDOFF + recovery
+28. conversation delivery journal + ambiguous-send reconciliation
+29. deterministic fake/manual transport proof
 
-**Gate:** deterministic fake driver proves INIT -> PLAN -> EXECUTED -> DONE, duplicate safety, auth-required behavior and manual fallback. No live ChatGPT credential is required in CI.
+Detailed implementation pack for both V0.8A and V0.8B: `phases/v0.8-control-plane/00-README.md`.
+
+Implementation order:
+
+```text
+V0.8A-1 conversation binding + UC-CTRL-01..02
+  -> V0.8A-2 send/receive + fake/manual transport
+  -> V0.8A-3 iteration/resume/handoff/recovery
+```
+
+**Gate:** INIT -> PLAN -> EXECUTED -> DONE and two-iteration REPLAN are deterministic under fake/manual transport; browser/transport failure cannot advance C2C protocol state; ambiguous sends are inspected before resend; conversation binding is workspace/task isolated; no live ChatGPT credential is required in CI.
 
 ## Phase V0.8B — Execution Agent Integration
 
-28. `UC-AGT-01..04` (Antigravity first)
-29. Antigravity real browser/computer-use smoke: open/attach conversation, bounded C2C relay, local code execution, evidence record, review loop.
+30. `UC-AGT-01..04` (Antigravity first)
+31. install/expose the Antigravity integration pack
+32. use Antigravity's own Browser Agent for ChatGPT Web transport
+33. run real/operator-assisted Antigravity smoke for INIT -> PLAN -> local execution -> evidence -> EXECUTED -> review -> DONE/REPLAN
+34. run one restart/resume or HANDOFF recovery smoke
 
-**Gate:** Antigravity can drive the full control loop while ChatGPT independently reads source/diff/test evidence through MCP. Password/passkey/CAPTCHA/MFA remain user-owned actions.
+The V0.8 IDE path deliberately does **not** require a concrete `.NET AntigravityBrowserControlDriver`. C2C.NET exposes provider-neutral C2C/control contracts; the Antigravity agent owns editor/terminal/browser execution. A future programmatic SDK adapter may be added only behind a separate ADR and outside `C2C.Core`.
+
+**Gate:** Antigravity can drive the full control loop while ChatGPT independently reads source/diff/test evidence through MCP; user-owned password/passkey/CAPTCHA/MFA actions pause safely; manual fallback remains usable; C2C.NET stores no ChatGPT browser credentials.
 
 ## Phase V0.9 — Packaging
 
-30. `UC-PKG-01`
-31. `UC-PKG-02` only when the first real state migration is needed.
+35. `UC-PKG-01`
+36. `UC-PKG-02` only when the first real state migration is needed.
 
-Do not implement a later phase merely because an agent has spare context. Each gate must be reviewed before the next security boundary is exposed. The Control Plane Automation design may be documented early, but runtime code must not be introduced before its V0.8 slice.
+Do not implement a later phase merely because an agent has spare context. Each gate must be reviewed before the next security boundary is exposed. Provider UI automation may change over time; browser/UI churn must not redefine C2C protocol or security semantics.
