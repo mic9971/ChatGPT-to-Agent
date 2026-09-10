@@ -6,6 +6,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 using C2C.Core.Common;
+using C2C.Core.Execution;
 using C2C.Core.Git;
 using C2C.Core.Workspace;
 
@@ -88,6 +89,40 @@ public static class McpServerConfigurator
     }
     """).RootElement;
 
+    private static readonly JsonElement ExecutionSummarySchema = JsonDocument.Parse("""
+    {
+      "type": "object",
+      "properties": {
+        "executionId": { "type": "string", "description": "Unique identifier of the execution record." }
+      },
+      "required": ["executionId"]
+    }
+    """).RootElement;
+
+    private static readonly JsonElement TestStatusSchema = JsonDocument.Parse("""
+    {
+      "type": "object",
+      "properties": {
+        "executionId": { "type": "string", "description": "Unique identifier of the execution record." }
+      },
+      "required": ["executionId"]
+    }
+    """).RootElement;
+
+    private static readonly JsonElement ExecutionOutputSchema = JsonDocument.Parse("""
+    {
+      "type": "object",
+      "properties": {
+        "executionId": { "type": "string", "description": "Unique identifier of the execution record." },
+        "artifactId": { "type": "string", "description": "Identifier of the artifact to read." },
+        "cursor": { "type": "string", "description": "Opaque pagination cursor from previous response." },
+        "limitLines": { "type": "integer", "description": "Maximum lines of content to return in this chunk." },
+        "limitBytes": { "type": "integer", "description": "Maximum bytes of content to return in this chunk." }
+      },
+      "required": ["executionId", "artifactId"]
+    }
+    """).RootElement;
+
     public static void Configure(IMcpServerBuilder mcpBuilder)
     {
         // 1. Stateless HTTP transport (ADR-003, UC-MCP-01)
@@ -158,6 +193,27 @@ public static class McpServerConfigurator
                 Title = "Read Git Diff",
                 Description = "Returns bounded diff bodies only for changed paths that pass workspace visibility policy. Uses two-stage design: paths are filtered before diff bodies are fetched.",
                 InputSchema = GitDiffSchema
+            },
+            new Tool
+            {
+                Name = "execution_summary",
+                Title = "Read Execution Summary",
+                Description = "Returns safe execution evidence metadata, exit status, visible changed files, and artifact references for an execution record.",
+                InputSchema = ExecutionSummarySchema
+            },
+            new Tool
+            {
+                Name = "test_status",
+                Title = "Read Normalized Test Status",
+                Description = "Returns normalized test suites, counts, and status (NotRun, Passed, Failed, Partial, Unknown) for an execution record.",
+                InputSchema = TestStatusSchema
+            },
+            new Tool
+            {
+                Name = "execution_output",
+                Title = "Read Sanitized Execution Output",
+                Description = "Returns bounded paginated chunks of sanitized execution output. Restricted artifacts expose metadata only and never the body.",
+                InputSchema = ExecutionOutputSchema
             }
         ];
     }
@@ -187,6 +243,15 @@ public static class McpServerConfigurator
 
             case "git_diff":
                 return await HandleGitDiffAsync(request, ct);
+
+            case "execution_summary":
+                return await HandleExecutionSummaryAsync(request, ct);
+
+            case "test_status":
+                return await HandleTestStatusAsync(request, ct);
+
+            case "execution_output":
+                return await HandleExecutionOutputAsync(request, ct);
 
             default:
                 return new CallToolResult
@@ -532,6 +597,247 @@ public static class McpServerConfigurator
         var gitReq = new GitDiffRequest { Base = baseRef, Cursor = cursor, Limit = limit };
         var result = await gitReader.GetDiffAsync(context, gitReq, ct);
 
+        if (result.IsFailure)
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new { error = result.Error }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        return new CallToolResult
+        {
+            IsError = false,
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = JsonSerializer.Serialize(result.Value, JsonOptions)
+                }
+            ]
+        };
+    }
+
+    private static async Task<CallToolResult> HandleExecutionSummaryAsync(
+        RequestContext<CallToolRequestParams> request,
+        CancellationToken ct)
+    {
+        var services = request.Services ?? throw new InvalidOperationException("Service provider is unavailable.");
+        var query = services.GetRequiredService<IExecutionQuery>();
+        var context = services.GetRequiredService<IWorkspaceContext>();
+
+        var args = request.Params.Arguments;
+        string? executionId = null;
+        if (args != null && args.TryGetValue("executionId", out var idElem) && idElem.ValueKind == JsonValueKind.String)
+        {
+            executionId = idElem.GetString();
+        }
+
+        if (string.IsNullOrWhiteSpace(executionId))
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new
+                        {
+                            error = new OperationError(CommonErrorCodes.InvalidArgument, "executionId is required.")
+                        }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        var result = await query.GetSummaryAsync(context.Id.Value, executionId, ct);
+        if (result.IsFailure)
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new { error = result.Error }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        return new CallToolResult
+        {
+            IsError = false,
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = JsonSerializer.Serialize(result.Value, JsonOptions)
+                }
+            ]
+        };
+    }
+
+    private static async Task<CallToolResult> HandleTestStatusAsync(
+        RequestContext<CallToolRequestParams> request,
+        CancellationToken ct)
+    {
+        var services = request.Services ?? throw new InvalidOperationException("Service provider is unavailable.");
+        var query = services.GetRequiredService<IExecutionQuery>();
+        var context = services.GetRequiredService<IWorkspaceContext>();
+
+        var args = request.Params.Arguments;
+        string? executionId = null;
+        if (args != null && args.TryGetValue("executionId", out var idElem) && idElem.ValueKind == JsonValueKind.String)
+        {
+            executionId = idElem.GetString();
+        }
+
+        if (string.IsNullOrWhiteSpace(executionId))
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new
+                        {
+                            error = new OperationError(CommonErrorCodes.InvalidArgument, "executionId is required.")
+                        }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        var result = await query.GetTestStatusAsync(context.Id.Value, executionId, ct);
+        if (result.IsFailure)
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new { error = result.Error }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        return new CallToolResult
+        {
+            IsError = false,
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = JsonSerializer.Serialize(result.Value, JsonOptions)
+                }
+            ]
+        };
+    }
+
+    private static async Task<CallToolResult> HandleExecutionOutputAsync(
+        RequestContext<CallToolRequestParams> request,
+        CancellationToken ct)
+    {
+        var services = request.Services ?? throw new InvalidOperationException("Service provider is unavailable.");
+        var reader = services.GetRequiredService<IExecutionArtifactReader>();
+        var context = services.GetRequiredService<IWorkspaceContext>();
+
+        var args = request.Params.Arguments;
+        string? executionId = null;
+        string? artifactId = null;
+        string? cursor = null;
+        int? limitLines = null;
+        int? limitBytes = null;
+
+        if (args != null)
+        {
+            if (args.TryGetValue("executionId", out var idElem) && idElem.ValueKind == JsonValueKind.String)
+            {
+                executionId = idElem.GetString();
+            }
+
+            if (args.TryGetValue("artifactId", out var artElem) && artElem.ValueKind == JsonValueKind.String)
+            {
+                artifactId = artElem.GetString();
+            }
+
+            if (args.TryGetValue("cursor", out var cElem) && cElem.ValueKind == JsonValueKind.String)
+            {
+                cursor = cElem.GetString();
+            }
+
+            if (args.TryGetValue("limitLines", out var llElem) && llElem.TryGetInt32(out var llVal))
+            {
+                limitLines = llVal;
+            }
+
+            if (args.TryGetValue("limitBytes", out var lbElem) && lbElem.TryGetInt32(out var lbVal))
+            {
+                limitBytes = lbVal;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(executionId))
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new
+                        {
+                            error = new OperationError(CommonErrorCodes.InvalidArgument, "executionId is required.")
+                        }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(artifactId))
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new
+                        {
+                            error = new OperationError(CommonErrorCodes.InvalidArgument, "artifactId is required.")
+                        }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        var chunkReq = new ArtifactChunkRequest
+        {
+            ExecutionId = executionId,
+            ArtifactId = artifactId,
+            Cursor = cursor,
+            LimitLines = limitLines,
+            LimitBytes = limitBytes
+        };
+
+        var result = await reader.GetChunkAsync(context.Id.Value, chunkReq, ct);
         if (result.IsFailure)
         {
             return new CallToolResult

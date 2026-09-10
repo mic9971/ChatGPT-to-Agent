@@ -82,14 +82,17 @@ public sealed class McpEndpointTests : IDisposable
             .Select(t => t.GetProperty("name").GetString())
             .ToList();
 
-        // 6 approved read-only tools in V0.2 (workspace + git evidence)
+        // 9 approved read-only tools in V0.3 (workspace + git evidence + execution evidence)
         Assert.Contains("workspace_info", toolNames);
         Assert.Contains("read_file", toolNames);
         Assert.Contains("list_directory", toolNames);
         Assert.Contains("search_workspace", toolNames);
         Assert.Contains("git_status", toolNames);
         Assert.Contains("git_diff", toolNames);
-        Assert.Equal(6, toolNames.Count);
+        Assert.Contains("execution_summary", toolNames);
+        Assert.Contains("test_status", toolNames);
+        Assert.Contains("execution_output", toolNames);
+        Assert.Equal(9, toolNames.Count);
 
         // BR-COM-002: Zero write or shell execution tools
         Assert.DoesNotContain("write_file", toolNames);
