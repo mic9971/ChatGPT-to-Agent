@@ -44,13 +44,26 @@
 
 17. `UC-C2C-01..08`
 
-## Phase V0.8 — Agent integration
+**Gate:** protocol/session transitions, evidence references, idempotency, executor lease and HANDOFF are deterministic without browser automation.
 
-18. `UC-AGT-01..04` (Antigravity first)
+## Phase V0.8A — Control Plane Automation Core
+
+18. `UC-CTRL-01..04` session/conversation/send/receive
+19. `UC-CTRL-05..08` loop/resume/handoff/recovery
+20. Implement the transport abstraction only now, after V0.7 contracts are accepted.
+
+**Gate:** deterministic fake driver proves INIT -> PLAN -> EXECUTED -> DONE, duplicate safety, auth-required behavior and manual fallback. No live ChatGPT credential is required in CI.
+
+## Phase V0.8B — Execution Agent Integration
+
+21. `UC-AGT-01..04` (Antigravity first)
+22. Antigravity real browser/computer-use smoke: open/attach conversation, bounded C2C relay, local code execution, evidence record, review loop.
+
+**Gate:** Antigravity can drive the full control loop while ChatGPT independently reads source/diff/test evidence through MCP. Password/passkey/CAPTCHA/MFA remain user-owned actions.
 
 ## Phase V0.9 — Packaging
 
-19. `UC-PKG-01`
-20. `UC-PKG-02` only when the first real state migration is needed.
+23. `UC-PKG-01`
+24. `UC-PKG-02` only when the first real state migration is needed.
 
-Do not implement a later phase merely because an agent has spare context. Each gate must be reviewed before the next security boundary is exposed.
+Do not implement a later phase merely because an agent has spare context. Each gate must be reviewed before the next security boundary is exposed. The Control Plane Automation design may be documented early, but runtime code must not be introduced before its V0.8 slice.

@@ -65,6 +65,15 @@ The CLI SHALL support at minimum: `setup`, `start`, `stop`, `status`, `doctor`, 
 ### FR-17 Machine-readable mode
 Agent-facing CLI operations SHALL provide stable `--json` output with schema/version fields and stable error codes.
 
+### FR-18 Automated control transport
+The system SHALL support a replaceable control-plane transport that can relay validated bounded C2C messages between an execution agent and ChatGPT Web. The first automated profile targets Antigravity browser/computer-use capability; a manual operator-assisted transport SHALL remain available.
+
+### FR-19 Conversation binding and recovery
+An automated planning conversation SHALL be bound to one workspace/task identity. Non-secret conversation references and last accepted C2C checkpoint MAY be persisted to support restart. Missing conversations SHALL use explicit HANDOFF rather than silent context replacement.
+
+### FR-20 Browser authentication boundary
+ChatGPT account authentication remains user-owned. The execution agent SHALL NOT capture or persist passwords, passkeys, cookies, CAPTCHA responses, MFA/2FA secrets or equivalent browser credential material. Authentication challenges SHALL return a user-action-required state.
+
 ## Non-functional summary
 
 - Security-first and fail-closed.
@@ -75,6 +84,7 @@ Agent-facing CLI operations SHALL provide stable `--json` output with schema/ver
 - Structured logs with redaction.
 - High unit-test coverage on security and protocol state transitions.
 - Integration tests for MCP/auth/CLI lifecycle.
+- Control-plane browser automation is replaceable and recoverable; CI uses deterministic fake drivers rather than live ChatGPT credentials.
 
 ## Out of scope for V1
 
@@ -84,4 +94,5 @@ Agent-facing CLI operations SHALL provide stable `--json` output with schema/ver
 - Web management dashboard.
 - Distributed execution queue.
 - Automatic Git commit/push.
-- Full coding-agent SDK integration.
+- Full proprietary coding-agent SDK integration inside C2C.Core.
+- Capturing or bypassing ChatGPT login credentials, CAPTCHA, passkeys or MFA/2FA.
