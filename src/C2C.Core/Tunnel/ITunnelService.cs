@@ -13,6 +13,12 @@ public interface ITunnelService
     Task<OperationResult<TunnelSession>> StartTunnelAsync(
         CancellationToken cancellationToken = default);
 
+    Task<OperationResult<TunnelSession>> EnsureTunnelAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<OperationResult<bool>> StopTunnelAsync(
+        CancellationToken cancellationToken = default);
+
     Task<TunnelSession?> GetCurrentSessionAsync(
         CancellationToken cancellationToken = default);
 }

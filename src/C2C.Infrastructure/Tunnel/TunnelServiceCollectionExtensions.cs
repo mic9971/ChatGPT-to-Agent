@@ -23,9 +23,13 @@ public static class TunnelServiceCollectionExtensions
         services.AddSingleton(options);
 
         services.AddSingleton<ITunnelSessionStore, JsonTunnelSessionStore>();
+        services.AddSingleton<IOwnedProcessValidator, SystemOwnedProcessValidator>();
         services.AddSingleton<IOwnedProcessRunner, SystemOwnedProcessRunner>();
         services.AddSingleton<ITunnelProvider, CloudflareQuickTunnelProvider>();
         services.AddSingleton<ITunnelService, TunnelService>();
+        services.AddSingleton<IBridgeRuntime, LoopbackBridgeRuntime>();
+        services.AddSingleton<IPairingProbe, DefaultPairingProbe>();
+        services.AddSingleton<IRuntimeEnsurer, RuntimeEnsurer>();
 
         return services;
     }

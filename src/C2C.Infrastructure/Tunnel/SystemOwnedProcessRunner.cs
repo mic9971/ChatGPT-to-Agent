@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -94,18 +95,43 @@ public sealed class SystemOwnedProcessRunner : IOwnedProcessRunner
 
             try
             {
+                // 1. Cooperative termination request (BR-CON-008)
+                SendCooperativeSignal(_process);
+
                 using var timeoutCts = new CancellationTokenSource(gracefulTimeout);
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-                // Wait gracefully for process termination
+                // 2. Wait gracefully for process termination
                 await _process.WaitForExitAsync(linkedCts.Token);
             }
             catch (OperationCanceledException)
             {
-                // Graceful period expired or cancelled: force kill owned child process
+                // Graceful period expired or cancelled: force kill owned child process (BR-CON-008)
                 Kill();
             }
         }
+
+        private static void SendCooperativeSignal(Process process)
+        {
+            try
+            {
+                if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+                {
+                    kill(process.Id, 15); // SIGTERM
+                }
+                else if (OperatingSystem.IsWindows())
+                {
+                    process.CloseMainWindow();
+                }
+            }
+            catch
+            {
+                // Ignore signaling failure; timeout fallback will handle forced termination
+            }
+        }
+
+        [DllImport("libc", SetLastError = true)]
+        private static extern int kill(int pid, int sig);
 
         public void Kill()
         {

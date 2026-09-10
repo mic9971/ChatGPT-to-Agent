@@ -30,6 +30,14 @@ public sealed class TunnelHealth
         CheckedAt = checkedAt
     };
 
+    public static TunnelHealth Degraded(string reasonCode, string message, DateTimeOffset checkedAt) => new()
+    {
+        Status = TunnelStatus.Degraded,
+        ReasonCode = reasonCode,
+        Message = message,
+        CheckedAt = checkedAt
+    };
+
     public static TunnelHealth Starting(DateTimeOffset checkedAt) => new()
     {
         Status = TunnelStatus.Starting,

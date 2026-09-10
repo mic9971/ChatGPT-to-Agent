@@ -1,6 +1,8 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,7 +13,7 @@ using C2C.Core.Workspace;
 namespace C2C.Infrastructure.Tunnel.Cloudflare;
 
 /// <summary>
-/// Implements Cloudflare Quick Tunnel provider adhering to UC-TUN-01, BR-SEC-005, and BR-CON-008.
+/// Implements Cloudflare Quick Tunnel provider adhering to UC-TUN-01, UC-TUN-02, BR-SEC-005, and BR-CON-008.
 /// </summary>
 public sealed class CloudflareQuickTunnelProvider : ITunnelProvider
 {
@@ -19,6 +21,7 @@ public sealed class CloudflareQuickTunnelProvider : ITunnelProvider
     private readonly IWorkspaceContext _workspaceContext;
     private readonly TimeProvider _timeProvider;
     private readonly TunnelOptions _options;
+    private readonly IOwnedProcessValidator _processValidator;
     private readonly object _lock = new();
 
     private IOwnedProcess? _activeProcess;
@@ -27,12 +30,14 @@ public sealed class CloudflareQuickTunnelProvider : ITunnelProvider
         IOwnedProcessRunner processRunner,
         IWorkspaceContext workspaceContext,
         TimeProvider? timeProvider = null,
-        TunnelOptions? options = null)
+        TunnelOptions? options = null,
+        IOwnedProcessValidator? processValidator = null)
     {
         _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
         _workspaceContext = workspaceContext ?? throw new ArgumentNullException(nameof(workspaceContext));
         _timeProvider = timeProvider ?? TimeProvider.System;
         _options = options ?? new TunnelOptions();
+        _processValidator = processValidator ?? new SystemOwnedProcessValidator();
     }
 
     public string ProviderName => "cloudflare-quick";
@@ -187,18 +192,99 @@ public sealed class CloudflareQuickTunnelProvider : ITunnelProvider
             _activeProcess = null;
         }
 
+        // 1. In-memory owned process tracking
         if (processToStop != null)
         {
-            try
+            bool isMatchingProcess = processToStop.Id == session.ProcessId &&
+                string.Equals(processToStop.OwnershipMarker, session.OwnershipMarker, StringComparison.Ordinal);
+
+            if (isMatchingProcess)
             {
-                await processToStop.StopAsync(TimeSpan.FromSeconds(3), cancellationToken);
+                try
+                {
+                    await processToStop.StopAsync(TimeSpan.FromSeconds(3), cancellationToken);
+                }
+                finally
+                {
+                    processToStop.Dispose();
+                }
             }
-            finally
+            // Foreign/mismatched in-memory process: do not signal or kill (BR-CON-008)
+            return;
+        }
+
+        // 2. Validate external process if PID was recorded from a previous session
+        if (session.ProcessId.HasValue)
+        {
+            int pid = session.ProcessId.Value;
+            ProcessOwnershipStatus status = _processValidator.ValidateOwnership(
+                pid,
+                session.StartedAt,
+                session.OwnershipMarker,
+                "cloudflared");
+
+            if (status == ProcessOwnershipStatus.OwnedAndActive)
             {
-                processToStop.Dispose();
+                try
+                {
+                    using Process osProcess = Process.GetProcessById(pid);
+                    if (!osProcess.HasExited)
+                    {
+                        SendCooperativeSignal(osProcess);
+
+                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+                        try
+                        {
+                            await osProcess.WaitForExitAsync(linkedCts.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Step 5: Force terminate only if still same owned process after timeout
+                            var recheck = _processValidator.ValidateOwnership(
+                                pid,
+                                session.StartedAt,
+                                session.OwnershipMarker,
+                                "cloudflared");
+
+                            if (recheck == ProcessOwnershipStatus.OwnedAndActive && !osProcess.HasExited)
+                            {
+                                osProcess.Kill(entireProcessTree: true);
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Process exited or terminated
+                }
             }
+            // If ForeignOrReused: foreign process -> NEVER kill (BR-CON-008)
         }
     }
+
+    private static void SendCooperativeSignal(Process process)
+    {
+        try
+        {
+            if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+            {
+                kill(process.Id, 15);
+            }
+            else if (OperatingSystem.IsWindows())
+            {
+                process.CloseMainWindow();
+            }
+        }
+        catch
+        {
+            // Best-effort cooperative termination request
+        }
+    }
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int kill(int pid, int sig);
 
     private static async Task ReadStreamForUrlAsync(
         StreamReader reader,
