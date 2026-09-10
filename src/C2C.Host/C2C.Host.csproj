@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>C2C.Host</RootNamespace>
+    <AssemblyName>C2C.Host</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\C2C.Core\C2C.Core.csproj" />
+    <ProjectReference Include="..\C2C.Infrastructure\C2C.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

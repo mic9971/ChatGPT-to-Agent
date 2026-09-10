@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>C2C.IntegrationTests</RootNamespace>
+    <AssemblyName>C2C.IntegrationTests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\C2C.Core\C2C.Core.csproj" />
+    <ProjectReference Include="..\..\src\C2C.Infrastructure\C2C.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\C2C.Host\C2C.Host.csproj" />
+  </ItemGroup>
+</Project>

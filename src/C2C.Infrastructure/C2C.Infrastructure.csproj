@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>C2C.Infrastructure</RootNamespace>
+    <AssemblyName>C2C.Infrastructure</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\C2C.Core\C2C.Core.csproj" />
+  </ItemGroup>
+</Project>
