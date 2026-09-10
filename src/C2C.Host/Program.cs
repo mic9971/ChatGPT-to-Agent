@@ -1,52 +1,61 @@
-using System.Net;
+using System;
+using System.IO;
+
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+
 using C2C.Core.Common;
 using C2C.Core.Workspace;
 using C2C.Host.Mcp;
 using C2C.Infrastructure.Workspace;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
-var builder = WebApplication.CreateBuilder(args);
+namespace C2C.Host;
 
-// BR-SEC-005: Bridge listener binds loopback only in V1. Fail on wildcard/public.
-ValidateBindingAddresses(builder.Configuration["ASPNETCORE_URLS"]);
-
-// Register Core & Infrastructure services
-builder.Services.AddSingleton<ICanonicalPathResolver, CanonicalPathResolver>();
-builder.Services.AddSingleton<ISensitivePathPolicy, SensitivePathPolicy>();
-builder.Services.AddSingleton<IWorkspaceAccessPolicy, WorkspaceAccessPolicy>();
-builder.Services.AddSingleton<WorkspaceFileReaderOptions>();
-builder.Services.AddSingleton<IWorkspaceFileReader, WorkspaceFileReader>();
-builder.Services.AddSingleton<WorkspaceDirectoryReaderOptions>();
-builder.Services.AddSingleton<IWorkspaceDirectoryReader, WorkspaceDirectoryReader>();
-builder.Services.AddSingleton<IWorkspaceInfoService, WorkspaceInfoService>();
-builder.Services.AddSingleton<IWorkspaceConfigStore, JsonWorkspaceConfigStore>();
-builder.Services.AddSingleton<IWorkspaceIdentityFactory, Sha256WorkspaceIdentityFactory>();
-builder.Services.AddSingleton<IWorkspaceConfigurator, WorkspaceConfigurator>();
-
-// Default workspace context if none provided (e.g. from environment or config store)
-builder.Services.AddSingleton<IWorkspaceContext>(sp =>
+public class Program
 {
-    string currentDir = Directory.GetCurrentDirectory();
-    var factory = sp.GetRequiredService<IWorkspaceIdentityFactory>();
-    return new WorkspaceContext(factory.Create(currentDir), currentDir, "Default Workspace");
-});
+    public static async Task Main(string[] args)
+    {
+        var builder = WebApplication.CreateBuilder(args);
 
-// Configure MCP server using official C# SDK (UC-MCP-01)
-var mcpBuilder = builder.Services.AddMcpServer();
-McpServerConfigurator.Configure(mcpBuilder);
+        // BR-SEC-005: Bridge listener binds loopback only in V1. Fail on wildcard/public.
+        ValidateBindingAddresses(builder.Configuration["ASPNETCORE_URLS"]);
 
-var app = builder.Build();
+        // Register Core & Infrastructure services
+        builder.Services.AddSingleton<ICanonicalPathResolver, CanonicalPathResolver>();
+        builder.Services.AddSingleton<ISensitivePathPolicy, SensitivePathPolicy>();
+        builder.Services.AddSingleton<IWorkspaceAccessPolicy, WorkspaceAccessPolicy>();
+        builder.Services.AddSingleton<WorkspaceFileReaderOptions>();
+        builder.Services.AddSingleton<IWorkspaceFileReader, WorkspaceFileReader>();
+        builder.Services.AddSingleton<WorkspaceDirectoryReaderOptions>();
+        builder.Services.AddSingleton<IWorkspaceDirectoryReader, WorkspaceDirectoryReader>();
+        builder.Services.AddSingleton<WorkspaceSearchOptions>();
+        builder.Services.AddSingleton<ISearchBackend, ManagedSearchBackend>();
+        builder.Services.AddSingleton<IWorkspaceSearchService, WorkspaceSearchService>();
+        builder.Services.AddSingleton<IWorkspaceInfoService, WorkspaceInfoService>();
+        builder.Services.AddSingleton<IWorkspaceConfigStore, JsonWorkspaceConfigStore>();
+        builder.Services.AddSingleton<IWorkspaceIdentityFactory, Sha256WorkspaceIdentityFactory>();
+        builder.Services.AddSingleton<IWorkspaceConfigurator, WorkspaceConfigurator>();
 
-// Map stateless MCP endpoint at /mcp
-app.MapMcp("/mcp");
+        // Default workspace context if none provided (e.g. from environment or config store)
+        builder.Services.AddSingleton<IWorkspaceContext>(sp =>
+        {
+            string currentDir = Directory.GetCurrentDirectory();
+            var factory = sp.GetRequiredService<IWorkspaceIdentityFactory>();
+            return new WorkspaceContext(factory.Create(currentDir), currentDir, "Default Workspace");
+        });
 
-app.Run();
+        // Configure MCP server using official C# SDK (UC-MCP-01)
+        var mcpBuilder = builder.Services.AddMcpServer();
+        McpServerConfigurator.Configure(mcpBuilder);
 
-public partial class Program
-{
+        var app = builder.Build();
+
+        // Map stateless MCP endpoint at /mcp
+        app.MapMcp("/mcp");
+
+        await app.RunAsync();
+    }
+
     public static void ValidateBindingAddresses(string? urls)
     {
         if (string.IsNullOrWhiteSpace(urls))

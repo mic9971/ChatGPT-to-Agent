@@ -2,12 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using C2C.Core.Common;
-using C2C.Core.Workspace;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+
+using C2C.Core.Common;
+using C2C.Core.Workspace;
+using C2C.Host;
 
 namespace C2C.IntegrationTests.Mcp;
 
@@ -79,11 +82,12 @@ public sealed class McpEndpointTests : IDisposable
             .Select(t => t.GetProperty("name").GetString())
             .ToList();
 
-        // Exactly 3 approved tools in V0.2
+        // Exactly 4 approved tools in V0.2
         Assert.Contains("workspace_info", toolNames);
         Assert.Contains("read_file", toolNames);
         Assert.Contains("list_directory", toolNames);
-        Assert.Equal(3, toolNames.Count);
+        Assert.Contains("search_workspace", toolNames);
+        Assert.Equal(4, toolNames.Count);
 
         // BR-COM-002: Zero write or shell execution tools
         Assert.DoesNotContain("write_file", toolNames);
@@ -397,6 +401,145 @@ public sealed class McpEndpointTests : IDisposable
                 arguments = new
                 {
                     path = "../outside"
+                }
+            }
+        };
+
+        var response = await _client.PostAsJsonAsync("/mcp", requestPayload);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        var root = ExtractJsonRpcResponse(body);
+
+        Assert.True(root.TryGetProperty("result", out var resultElem));
+        Assert.True(resultElem.GetProperty("isError").GetBoolean());
+
+        var text = resultElem.GetProperty("content")[0].GetProperty("text").GetString()!;
+        Assert.Contains(CommonErrorCodes.WorkspacePathOutsideRoot, text);
+    }
+
+    [Fact]
+    public async Task PostMcp_CallSearchWorkspace_ReturnsMatchesWithoutLeakingSensitiveFiles()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_tempWorkspace, "mcp_search_target.txt"), "first line\nmatch_mcp_query text\nthird line");
+        await File.WriteAllTextAsync(Path.Combine(_tempWorkspace, ".env"), "SECRET=match_mcp_query");
+
+        var requestPayload = new
+        {
+            jsonrpc = "2.0",
+            id = 20,
+            method = "tools/call",
+            @params = new
+            {
+                name = "search_workspace",
+                arguments = new
+                {
+                    query = "match_mcp_query"
+                }
+            }
+        };
+
+        var response = await _client.PostAsJsonAsync("/mcp", requestPayload);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        var root = ExtractJsonRpcResponse(body);
+
+        Assert.True(root.TryGetProperty("result", out var resultElem));
+        Assert.False(resultElem.GetProperty("isError").GetBoolean());
+
+        var text = resultElem.GetProperty("content")[0].GetProperty("text").GetString()!;
+        using var doc = JsonDocument.Parse(text);
+        var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
+
+        Assert.Single(items);
+        Assert.Equal("mcp_search_target.txt", items[0].GetProperty("relativePath").GetString());
+        Assert.Equal(2, items[0].GetProperty("lineNumber").GetInt32());
+    }
+
+    [Fact]
+    public async Task PostMcp_CallSearchWorkspace_Pagination_ReturnsNextCursor()
+    {
+        List<string> lines = [];
+        for (int i = 1; i <= 6; i++)
+        {
+            lines.Add($"search_paged_token {i}");
+        }
+        await File.WriteAllLinesAsync(Path.Combine(_tempWorkspace, "paged_search.txt"), lines);
+
+        // Page 1: limit 3
+        var page1Payload = new
+        {
+            jsonrpc = "2.0",
+            id = 21,
+            method = "tools/call",
+            @params = new
+            {
+                name = "search_workspace",
+                arguments = new
+                {
+                    query = "search_paged_token",
+                    limit = 3
+                }
+            }
+        };
+
+        var response1 = await _client.PostAsJsonAsync("/mcp", page1Payload);
+        var body1 = await response1.Content.ReadAsStringAsync();
+        var root1 = ExtractJsonRpcResponse(body1);
+
+        var text1 = root1.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
+        using var doc1 = JsonDocument.Parse(text1);
+        var items1 = doc1.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal(3, items1.Count);
+
+        string? nextCursor = doc1.RootElement.GetProperty("nextCursor").GetString();
+        Assert.NotNull(nextCursor);
+
+        // Page 2: with cursor
+        var page2Payload = new
+        {
+            jsonrpc = "2.0",
+            id = 22,
+            method = "tools/call",
+            @params = new
+            {
+                name = "search_workspace",
+                arguments = new
+                {
+                    query = "search_paged_token",
+                    cursor = nextCursor,
+                    limit = 3
+                }
+            }
+        };
+
+        var response2 = await _client.PostAsJsonAsync("/mcp", page2Payload);
+        var body2 = await response2.Content.ReadAsStringAsync();
+        var root2 = ExtractJsonRpcResponse(body2);
+
+        var text2 = root2.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
+        using var doc2 = JsonDocument.Parse(text2);
+        var items2 = doc2.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal(3, items2.Count);
+        Assert.Null(doc2.RootElement.GetProperty("nextCursor").GetString());
+    }
+
+    [Fact]
+    public async Task PostMcp_CallSearchWorkspace_TraversalScope_FailsWithOutsideRoot()
+    {
+        var requestPayload = new
+        {
+            jsonrpc = "2.0",
+            id = 23,
+            method = "tools/call",
+            @params = new
+            {
+                name = "search_workspace",
+                arguments = new
+                {
+                    query = "anything",
+                    pathScope = "../escape"
                 }
             }
         };

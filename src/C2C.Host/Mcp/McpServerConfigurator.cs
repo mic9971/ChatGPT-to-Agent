@@ -52,6 +52,19 @@ public static class McpServerConfigurator
     }
     """).RootElement;
 
+    private static readonly JsonElement SearchWorkspaceSchema = JsonDocument.Parse("""
+    {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Text to search for across visible workspace files." },
+        "pathScope": { "type": "string", "description": "Optional relative path to scope search within." },
+        "cursor": { "type": "string", "description": "Opaque pagination cursor from previous response." },
+        "limit": { "type": "integer", "description": "Maximum number of matches to return (default 50, max 200)." }
+      },
+      "required": ["query"]
+    }
+    """).RootElement;
+
     public static void Configure(IMcpServerBuilder mcpBuilder)
     {
         // 1. Stateless HTTP transport (ADR-003, UC-MCP-01)
@@ -101,6 +114,13 @@ public static class McpServerConfigurator
                 Title = "List Workspace Directory",
                 Description = "Lists direct children under a workspace-relative directory with pre-disclosure filtering and pagination.",
                 InputSchema = ListDirectorySchema
+            },
+            new Tool
+            {
+                Name = "search_workspace",
+                Title = "Search Workspace Text",
+                Description = "Searches visible text files within the workspace with pre-disclosure filtering, bounded matches, and pagination.",
+                InputSchema = SearchWorkspaceSchema
             }
         ];
     }
@@ -121,6 +141,9 @@ public static class McpServerConfigurator
 
             case "list_directory":
                 return await HandleListDirectoryAsync(request, ct);
+
+            case "search_workspace":
+                return await HandleSearchWorkspaceAsync(request, ct);
 
             default:
                 return new CallToolResult
@@ -285,6 +308,74 @@ public static class McpServerConfigurator
 
         var pageReq = new PageRequest(cursor, limit);
         var result = await dirReader.ListAsync(context, path, pageReq, ct);
+
+        if (result.IsFailure)
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new { error = result.Error }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        return new CallToolResult
+        {
+            IsError = false,
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = JsonSerializer.Serialize(result.Value, JsonOptions)
+                }
+            ]
+        };
+    }
+
+    private static async Task<CallToolResult> HandleSearchWorkspaceAsync(
+        RequestContext<CallToolRequestParams> request,
+        CancellationToken ct)
+    {
+        var services = request.Services ?? throw new InvalidOperationException("Service provider is unavailable.");
+        var searchService = services.GetRequiredService<IWorkspaceSearchService>();
+        var context = services.GetRequiredService<IWorkspaceContext>();
+
+        var args = request.Params.Arguments;
+        string query = string.Empty;
+        string? pathScope = null;
+        string? cursor = null;
+        int? limit = null;
+
+        if (args != null)
+        {
+            if (args.TryGetValue("query", out var qElem) && qElem.ValueKind == JsonValueKind.String)
+            {
+                query = qElem.GetString() ?? string.Empty;
+            }
+
+            if (args.TryGetValue("pathScope", out var psElem) && psElem.ValueKind == JsonValueKind.String)
+            {
+                pathScope = psElem.GetString();
+            }
+
+            if (args.TryGetValue("cursor", out var cElem) && cElem.ValueKind == JsonValueKind.String)
+            {
+                cursor = cElem.GetString();
+            }
+
+            if (args.TryGetValue("limit", out var lElem) && lElem.TryGetInt32(out var lVal))
+            {
+                limit = lVal;
+            }
+        }
+
+        var searchReq = new WorkspaceSearchRequest(query, pathScope, cursor, limit);
+        var result = await searchService.SearchAsync(context, searchReq, ct);
 
         if (result.IsFailure)
         {

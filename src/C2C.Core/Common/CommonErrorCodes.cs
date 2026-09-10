@@ -13,5 +13,6 @@ public static class CommonErrorCodes
     public const string Conflict = "C2C_CONFLICT";
     public const string InvalidArgument = "C2C_INVALID_ARGUMENT";
     public const string OutputLimitExceeded = "OUTPUT_LIMIT_EXCEEDED";
+    public const string Timeout = "C2C_TIMEOUT";
     public const string NotReady = "C2C_NOT_READY";
 }
