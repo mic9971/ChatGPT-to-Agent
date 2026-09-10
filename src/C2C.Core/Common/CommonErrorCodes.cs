@@ -18,4 +18,5 @@ public static class CommonErrorCodes
     public const string GitNotAvailable = "GIT_NOT_AVAILABLE";
     public const string ExecutionNotFound = "EXECUTION_NOT_FOUND";
     public const string ProtocolVersionUnsupported = "PROTOCOL_VERSION_UNSUPPORTED";
+    public const string TunnelStartFailed = "TUNNEL_START_FAILED";
 }
