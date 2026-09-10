@@ -15,4 +15,7 @@ public static class CommonErrorCodes
     public const string OutputLimitExceeded = "OUTPUT_LIMIT_EXCEEDED";
     public const string Timeout = "C2C_TIMEOUT";
     public const string NotReady = "C2C_NOT_READY";
+    public const string GitNotAvailable = "GIT_NOT_AVAILABLE";
+    public const string ExecutionNotFound = "EXECUTION_NOT_FOUND";
+    public const string ProtocolVersionUnsupported = "PROTOCOL_VERSION_UNSUPPORTED";
 }

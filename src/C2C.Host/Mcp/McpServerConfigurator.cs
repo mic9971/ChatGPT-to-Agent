@@ -1,10 +1,13 @@
 using System.Text.Json;
-using C2C.Core.Common;
-using C2C.Core.Workspace;
+
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+
+using C2C.Core.Common;
+using C2C.Core.Git;
+using C2C.Core.Workspace;
 
 namespace C2C.Host.Mcp;
 
@@ -65,6 +68,26 @@ public static class McpServerConfigurator
     }
     """).RootElement;
 
+    private static readonly JsonElement GitStatusSchema = JsonDocument.Parse("""
+    {
+      "type": "object",
+      "properties": {
+        "pathScope": { "type": "string", "description": "Optional workspace-relative path to scope status output within." }
+      }
+    }
+    """).RootElement;
+
+    private static readonly JsonElement GitDiffSchema = JsonDocument.Parse("""
+    {
+      "type": "object",
+      "properties": {
+        "base": { "type": "string", "description": "Optional base ref (e.g. 'HEAD', 'main'). Omit to compare working tree to index." },
+        "cursor": { "type": "string", "description": "Opaque pagination cursor from previous response." },
+        "limit": { "type": "integer", "description": "Maximum number of diff records to return." }
+      }
+    }
+    """).RootElement;
+
     public static void Configure(IMcpServerBuilder mcpBuilder)
     {
         // 1. Stateless HTTP transport (ADR-003, UC-MCP-01)
@@ -121,6 +144,20 @@ public static class McpServerConfigurator
                 Title = "Search Workspace Text",
                 Description = "Searches visible text files within the workspace with pre-disclosure filtering, bounded matches, and pagination.",
                 InputSchema = SearchWorkspaceSchema
+            },
+            new Tool
+            {
+                Name = "git_status",
+                Title = "Read Git Status",
+                Description = "Returns bounded machine-readable working-tree status for workspace-visible paths only. Denied paths are excluded without leaking their names.",
+                InputSchema = GitStatusSchema
+            },
+            new Tool
+            {
+                Name = "git_diff",
+                Title = "Read Git Diff",
+                Description = "Returns bounded diff bodies only for changed paths that pass workspace visibility policy. Uses two-stage design: paths are filtered before diff bodies are fetched.",
+                InputSchema = GitDiffSchema
             }
         ];
     }
@@ -144,6 +181,12 @@ public static class McpServerConfigurator
 
             case "search_workspace":
                 return await HandleSearchWorkspaceAsync(request, ct);
+
+            case "git_status":
+                return await HandleGitStatusAsync(request, ct);
+
+            case "git_diff":
+                return await HandleGitDiffAsync(request, ct);
 
             default:
                 return new CallToolResult
@@ -376,6 +419,118 @@ public static class McpServerConfigurator
 
         var searchReq = new WorkspaceSearchRequest(query, pathScope, cursor, limit);
         var result = await searchService.SearchAsync(context, searchReq, ct);
+
+        if (result.IsFailure)
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new { error = result.Error }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        return new CallToolResult
+        {
+            IsError = false,
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = JsonSerializer.Serialize(result.Value, JsonOptions)
+                }
+            ]
+        };
+    }
+
+    private static async Task<CallToolResult> HandleGitStatusAsync(
+        RequestContext<CallToolRequestParams> request,
+        CancellationToken ct)
+    {
+        var services = request.Services ?? throw new InvalidOperationException("Service provider is unavailable.");
+        var gitReader = services.GetRequiredService<IGitReader>();
+        var context = services.GetRequiredService<IWorkspaceContext>();
+
+        var args = request.Params.Arguments;
+        string? pathScope = null;
+
+        if (args != null)
+        {
+            if (args.TryGetValue("pathScope", out var psElem) && psElem.ValueKind == JsonValueKind.String)
+            {
+                pathScope = psElem.GetString();
+            }
+        }
+
+        var gitReq = new GitStatusRequest { PathScope = pathScope };
+        var result = await gitReader.GetStatusAsync(context, gitReq, ct);
+
+        if (result.IsFailure)
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = JsonSerializer.Serialize(new { error = result.Error }, JsonOptions)
+                    }
+                ]
+            };
+        }
+
+        return new CallToolResult
+        {
+            IsError = false,
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = JsonSerializer.Serialize(result.Value, JsonOptions)
+                }
+            ]
+        };
+    }
+
+    private static async Task<CallToolResult> HandleGitDiffAsync(
+        RequestContext<CallToolRequestParams> request,
+        CancellationToken ct)
+    {
+        var services = request.Services ?? throw new InvalidOperationException("Service provider is unavailable.");
+        var gitReader = services.GetRequiredService<IGitReader>();
+        var context = services.GetRequiredService<IWorkspaceContext>();
+
+        var args = request.Params.Arguments;
+        string? baseRef = null;
+        string? cursor = null;
+        int? limit = null;
+
+        if (args != null)
+        {
+            if (args.TryGetValue("base", out var bElem) && bElem.ValueKind == JsonValueKind.String)
+            {
+                baseRef = bElem.GetString();
+            }
+
+            if (args.TryGetValue("cursor", out var cElem) && cElem.ValueKind == JsonValueKind.String)
+            {
+                cursor = cElem.GetString();
+            }
+
+            if (args.TryGetValue("limit", out var lElem) && lElem.TryGetInt32(out var lVal))
+            {
+                limit = lVal;
+            }
+        }
+
+        var gitReq = new GitDiffRequest { Base = baseRef, Cursor = cursor, Limit = limit };
+        var result = await gitReader.GetDiffAsync(context, gitReq, ct);
 
         if (result.IsFailure)
         {

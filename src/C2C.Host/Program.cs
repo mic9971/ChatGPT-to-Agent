@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using C2C.Core.Common;
 using C2C.Core.Workspace;
 using C2C.Host.Mcp;
+using C2C.Infrastructure.Git;
 using C2C.Infrastructure.Workspace;
 
 namespace C2C.Host;
@@ -20,21 +21,12 @@ public class Program
         // BR-SEC-005: Bridge listener binds loopback only in V1. Fail on wildcard/public.
         ValidateBindingAddresses(builder.Configuration["ASPNETCORE_URLS"]);
 
-        // Register Core & Infrastructure services
-        builder.Services.AddSingleton<ICanonicalPathResolver, CanonicalPathResolver>();
-        builder.Services.AddSingleton<ISensitivePathPolicy, SensitivePathPolicy>();
-        builder.Services.AddSingleton<IWorkspaceAccessPolicy, WorkspaceAccessPolicy>();
-        builder.Services.AddSingleton<WorkspaceFileReaderOptions>();
-        builder.Services.AddSingleton<IWorkspaceFileReader, WorkspaceFileReader>();
-        builder.Services.AddSingleton<WorkspaceDirectoryReaderOptions>();
-        builder.Services.AddSingleton<IWorkspaceDirectoryReader, WorkspaceDirectoryReader>();
-        builder.Services.AddSingleton<WorkspaceSearchOptions>();
-        builder.Services.AddSingleton<ISearchBackend, ManagedSearchBackend>();
-        builder.Services.AddSingleton<IWorkspaceSearchService, WorkspaceSearchService>();
-        builder.Services.AddSingleton<IWorkspaceInfoService, WorkspaceInfoService>();
-        builder.Services.AddSingleton<IWorkspaceConfigStore, JsonWorkspaceConfigStore>();
-        builder.Services.AddSingleton<IWorkspaceIdentityFactory, Sha256WorkspaceIdentityFactory>();
-        builder.Services.AddSingleton<IWorkspaceConfigurator, WorkspaceConfigurator>();
+        // Time abstraction (BR-CON-002, 03-DOTNET.md)
+        builder.Services.AddSingleton(TimeProvider.System);
+
+        // Register Core & Infrastructure services by capability (12-DI-CONVENTIONS.md)
+        builder.Services.AddWorkspaceServices();
+        builder.Services.AddGitServices();
 
         // Default workspace context if none provided (e.g. from environment or config store)
         builder.Services.AddSingleton<IWorkspaceContext>(sp =>
